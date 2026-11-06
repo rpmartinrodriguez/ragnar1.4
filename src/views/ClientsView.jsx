@@ -23,6 +23,7 @@ export default function ClientsView({
     name: '',
     email: '',
     plan: '',
+    serviceMode: 'plan',
     startDate: ''
   });
 
@@ -43,6 +44,7 @@ export default function ClientsView({
       name: '',
       email: '',
       plan: safePlans[0],
+      serviceMode: 'plan',
       startDate: new Date().toISOString().split('T')[0]
     });
     setIsModalOpen(true);
@@ -59,6 +61,7 @@ export default function ClientsView({
       name: String(client.name || ''),
       email: String(client.email || ''),
       plan: String(planStr),
+      serviceMode: client.serviceMode === 'presencial' ? 'presencial' : 'plan',
       startDate: client.startDate ? String(client.startDate) : new Date().toISOString().split('T')[0]
     });
     setIsModalOpen(true);
@@ -102,6 +105,7 @@ export default function ClientsView({
       name: String(formData.name),
       email: String(formData.email),
       plan: String(formData.plan || safePlans[0]),
+      serviceMode: formData.serviceMode === 'presencial' ? 'presencial' : 'plan',
       startDate: String(formData.startDate),
       status: 'active'
     };
@@ -174,6 +178,9 @@ export default function ClientsView({
                 <div className="flex flex-col items-end gap-1">
                   <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${client.studentUserId ? 'bg-green-900/30 text-green-400 border border-green-900' : 'bg-amber-900/30 text-amber-500 border border-amber-900'}`}>
                     {client.studentUserId ? 'App Vinculada' : 'Pendiente'}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wide ${client.serviceMode === 'presencial' ? 'bg-yellow-400/15 border border-yellow-400/30 text-yellow-400' : 'bg-zinc-800 border border-zinc-700 text-zinc-300'}`}>
+                    {client.serviceMode === 'presencial' ? 'Presencial' : 'Con plan'}
                   </span>
                   {/* Etiqueta visible si tiene días de gracia activos */}
                   {client.graceDays > 0 && (
@@ -259,6 +266,19 @@ export default function ClientsView({
               <div>
                 <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">Correo Electrónico (Opcional)</label>
                 <input type="email" className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-yellow-400 transition-colors" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">Modalidad de entrenamiento</label>
+                <div className="grid grid-cols-2 gap-2" role="group" aria-label="Modalidad">
+                  {[['plan', 'Con plan'], ['presencial', 'Presencial']].map(([value, title]) => (
+                    <button type="button" key={value} onClick={() => setFormData((data) => ({ ...data, serviceMode: value }))}
+                      aria-pressed={formData.serviceMode === value}
+                      className={`rounded-xl p-3 text-xs font-black uppercase border transition-colors ${formData.serviceMode === value ? 'bg-yellow-400 text-black border-yellow-400' : 'bg-zinc-900 text-zinc-400 border-zinc-800'}`}>
+                      {title}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-zinc-500">Presencial habilita la bitácora de ejercicios y notas compartidas. Con plan mantiene la planificación habitual.</p>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">Plan de Suscripción</label>
