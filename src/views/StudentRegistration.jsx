@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { db } from '../firebase';
+import { notifyActivity } from '../services/notifyActivity';
 import { ShieldCheck, LogIn, Dumbbell, Mail, Lock } from 'lucide-react';
 
 export default function StudentRegistration({ inviteId, onRegisterSuccess }) {
@@ -77,6 +78,7 @@ export default function StudentRegistration({ inviteId, onRegisterSuccess }) {
         email: user.email, // Por seguridad re-confirmamos el email
         linkedAt: new Date()
       });
+      void notifyActivity({ clientId: inviteId, type: 'student_linked', resourceId: inviteId });
 
       // 3. Llamamos a la función de éxito para redirigirlo a su app
       onRegisterSuccess();
