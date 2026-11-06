@@ -14,7 +14,8 @@ const firebaseConfig = {
 
 // 1. Inicializar Firebase
 export const isPreviewMissingFirebase = import.meta.env.VITE_RAGNAR_PREVIEW === 'true' &&
-  (!import.meta.env.VITE_FIREBASE_API_KEY || !import.meta.env.VITE_FIREBASE_PROJECT_ID ||
+  (!import.meta.env.VITE_FIREBASE_API_KEY || !import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
+  !import.meta.env.VITE_FIREBASE_PROJECT_ID || !import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ||
   !import.meta.env.VITE_FIREBASE_APP_ID);
 
 const app = initializeApp(firebaseConfig);
