@@ -13,6 +13,11 @@ const response = (statusCode, body) => ({
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return response(405, { error: 'Método no permitido' });
   try {
+    // Impedir avisos desde previews que utilicen la base de producción.
+    if (process.env.CONTEXT && process.env.CONTEXT !== 'production' &&
+        (!process.env.FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID === 'ragnar-training')) {
+      return response(503, { error: 'Se requiere un proyecto Firebase de pruebas.' });
+    }
     const match = /^Bearer (.+)$/.exec(event.headers.authorization || event.headers.Authorization || '');
     const uid = await verifyFirebaseUser(match?.[1]);
     if (!uid) return response(401, { error: 'Sesión inválida' });
