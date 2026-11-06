@@ -46,6 +46,9 @@ import { getAuth, signOut } from 'firebase/auth';
 import { db } from '../firebase';
 import CommunityView from './CommunityView';
 import ProgressChart from '../components/ProgressChart';
+import TrainingLog from '../components/TrainingLog';
+import PushPermissionButton from '../components/PushPermissionButton';
+import { notifyActivity } from '../services/notifyActivity';
 
 // --- BASE DE DATOS DE MEDALLAS ---
 const MEDALS_DB = {
@@ -97,6 +100,8 @@ export default function StudentView({ clientId }) {
   const [trainerSettings, setTrainerSettings] = useState({ alias: '', plans: [] });
   const [date, setDate] = useState(new Date());
   const [dailySession, setDailySession] = useState([]);
+  const [sessionNote, setSessionNote] = useState('');
+  const [savingSessionNote, setSavingSessionNote] = useState(false);
   const [isSessionFinalized, setIsSessionFinalized] = useState(false);
   const [allSessionsIds, setAllSessionsIds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -249,12 +254,14 @@ export default function StudentView({ clientId }) {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setDailySession(data.exercises || []);
+        setSessionNote(data.studentNote || '');
         setIsSessionFinalized(data.isFinalized || false);
         setHydration(data.hydration || '');
         setCardioMinutes(data.cardioMinutes || '');
         setCardioIntensity(data.cardioIntensity || 'Baja');
       } else {
         setDailySession([]);
+        setSessionNote('');
         setIsSessionFinalized(false);
         setHydration('');
         setCardioMinutes('');
@@ -411,6 +418,7 @@ export default function StudentView({ clientId }) {
         missedReason: missedReason 
       });
       
+      void notifyActivity({ clientId: client.id, type: 'missed_workout', resourceId: missedWorkout.id });
       await addDoc(collection(db, 'trainerNotifications'), {
         type: 'missed_workout', 
         clientId: client.id, 
@@ -565,6 +573,7 @@ export default function StudentView({ clientId }) {
         medals: earnedMedals
       }));
 
+      void notifyActivity({ clientId: client.id, type: 'workout_completed', resourceId: currentDateId });
       await addDoc(collection(db, 'trainerNotifications'), {
         type: 'workout_completed', 
         clientId: client.id, 
@@ -626,16 +635,31 @@ export default function StudentView({ clientId }) {
     e.preventDefault();
     if (!newMessage.trim()) return;
     try {
-      await addDoc(collection(db, 'clients', client.id, 'messages'), { 
+      const sent = await addDoc(collection(db, 'clients', client.id, 'messages'), { 
         text: newMessage, 
         sender: 'student', 
         createdAt: new Date(), 
         read: false 
       });
+      void notifyActivity({ clientId: client.id, type: 'message', resourceId: sent.id });
       setNewMessage('');
     } catch (error) {
       console.error(error);
     }
+  };
+
+  const saveSessionNote = async () => {
+    if (!hasPaidMonth || !sessionNote.trim() || savingSessionNote) return;
+    setSavingSessionNote(true);
+    try {
+      await setDoc(doc(db, 'clients', clientId, 'sessions', currentDateId), {
+        studentNote: sessionNote.trim().slice(0, 1000)
+      }, { merge: true });
+      void notifyActivity({ clientId, type: 'session_note', resourceId: currentDateId });
+    } catch (error) {
+      console.error(error);
+      alert('No se pudo guardar la nota de entrenamiento.');
+    } finally { setSavingSessionNote(false); }
   };
 
   const handleLogout = async () => { 
@@ -1246,6 +1270,12 @@ export default function StudentView({ clientId }) {
                 )}
             </div>
             
+            <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3 mt-6">
+              <h3 className="text-white font-black uppercase text-sm">Mi nota para el coach</h3>
+              <textarea rows={3} maxLength={1000} value={sessionNote} onChange={(e) => setSessionNote(e.target.value)} placeholder="¿Cómo estuvo el entrenamiento? Dejale una observación a tu coach." className="w-full rounded-xl bg-black text-zinc-100 border border-zinc-700 p-3 text-sm"/>
+              <button type="button" disabled={!sessionNote.trim() || savingSessionNote} onClick={saveSessionNote} className="bg-yellow-400 text-black rounded-xl px-4 py-3 font-black uppercase text-xs disabled:opacity-50">{savingSessionNote ? 'Guardando...' : 'Guardar nota'}</button>
+            </section>
+
             {dailySession.length > 0 && !isSessionFinalized && (
               <button 
                 onClick={handleFinishWorkout} 
@@ -1335,6 +1365,8 @@ export default function StudentView({ clientId }) {
                <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em] relative z-10">{client?.email}</p>
              </div>
              
+             <PushPermissionButton />
+             {client?.serviceMode === 'presencial' && <TrainingLog clientId={client.id} actor="student" clientName={client.name} />}
              {/* VITRINA DE TROFEOS */}
              <div className="bg-zinc-900 rounded-[2rem] p-6 border border-zinc-800 shadow-xl">
                <h3 className="text-white font-bold uppercase mb-4 flex items-center gap-2">
