@@ -10,3 +10,10 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Los deploys de prueba NO deben conectarse a la base real.
+[context.deploy-preview.environment]
+  VITE_RAGNAR_PREVIEW = "true"
+
+[context.branch-deploy.environment]
+  VITE_RAGNAR_PREVIEW = "true"
