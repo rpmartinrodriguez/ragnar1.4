@@ -26,7 +26,8 @@ import StudentRegistration from './views/StudentRegistration';
 import NotificationsView from './views/NotificationsView';
 import SettingsView from './views/SettingsView';
 import CommunityView from './views/CommunityView'; 
-import PaymentsView from './views/PaymentsView'; 
+import PaymentsView from './views/PaymentsView';
+import PushPermissionButton from './components/PushPermissionButton'; 
 
 export default function App() {
   // --- ESTADOS GLOBALES ---
@@ -73,13 +74,10 @@ export default function App() {
         setStudentProfileId(null);
       }
       
-      // MAGIA ANTI-PARPADEO: Dejamos que la data se cargue "tras bambalinas" por 1.5s
-      setTimeout(() => {
-        setSplashFade(true); // Inicia el desvanecimiento CSS
-        setTimeout(() => {
-          setIsAppReady(true); // Remueve la pantalla de carga del DOM
-        }, 700); // 700ms de transición fluida
-      }, 1500); 
+      // El splash termina cuando se resuelve el estado de autenticación.
+      // Evitamos 2.2 segundos de espera artificial en cada apertura.
+      setSplashFade(true);
+      setIsAppReady(true); 
     });
     
     return () => unsubscribe();
@@ -481,10 +479,13 @@ export default function App() {
             )}
             
             {activeView === 'settings' && (
+              <div className="space-y-5">
+                <PushPermissionButton />
               <SettingsView 
                 settings={settings} 
                 onUpdateSettings={handleUpdateSettings} 
               />
+              </div>
             )}
             
             {activeView === 'community' && (
