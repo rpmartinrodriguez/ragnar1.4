@@ -294,7 +294,9 @@ export default function App() {
           inviteId={inviteId} 
           onRegisterSuccess={() => { 
             window.history.pushState({}, document.title, window.location.pathname); 
-            setInviteId(null); 
+            setInviteId(null);
+            // El alta y el vínculo se acaban de guardar: refrescar el rol sin recargar.
+            if (auth.currentUser) void checkUserRole(auth.currentUser.uid);
           }} 
         />
       );
