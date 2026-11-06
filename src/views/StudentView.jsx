@@ -241,14 +241,16 @@ export default function StudentView({ clientId }) {
     checkYesterday();
   }, [client]);
 
-  // --- EFECTO 3: SINCRONIZACIÓN DE RUTINAS ---
+  // Resumen de sesiones estable: no reabrir la suscripción al navegar el calendario.
   useEffect(() => {
-    if (!client || !hasPaidMonth) return;
-    
-    const unsubSessions = onSnapshot(collection(db, 'clients', client.id, 'sessions'), (snapshot) => {
-      setAllSessionsIds(snapshot.docs.map(doc => doc.id));
+    if (!client?.id || !hasPaidMonth) return;
+    return onSnapshot(collection(db, 'clients', client.id, 'sessions'), (snapshot) => {
+      setAllSessionsIds(snapshot.docs.map((item) => item.id));
     });
-    
+  }, [client?.id, hasPaidMonth]);
+
+  useEffect(() => {
+    if (!client?.id || !hasPaidMonth) return;
     const sessionDocRef = doc(db, 'clients', client.id, 'sessions', currentDateId);
     const unsubDaily = onSnapshot(sessionDocRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -269,11 +271,9 @@ export default function StudentView({ clientId }) {
       }
     });
 
-    return () => { 
-      unsubSessions(); 
-      unsubDaily(); 
-    };
-  }, [date, client, currentDateId, hasPaidMonth]);
+
+    return () => unsubDaily();
+  }, [client?.id, currentDateId, hasPaidMonth]);
 
   // --- EFECTO 4: HISTORIAL DE SOBRECARGA PROGRESIVA ---
   useEffect(() => {
