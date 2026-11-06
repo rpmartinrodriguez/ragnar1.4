@@ -1,7 +1,7 @@
 import { createSign } from 'node:crypto';
 
-const PROJECT_ID = 'ragnar-training';
-const API_KEY = 'AIzaSyAtzIf6JGLQuDVYc6poZAOMgmjEzbEaZk0';
+const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'ragnar-training';
+const API_KEY = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyAtzIf6JGLQuDVYc6poZAOMgmjEzbEaZk0';
 const SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 let cachedToken = null;
 let cachedUntil = 0;
