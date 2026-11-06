@@ -95,8 +95,15 @@ export default function App() {
         setStudentProfileId(clientDoc.id);
       } else {
         // Una cuenta registrada no se convierte automáticamente en entrenador.
-        const trainerSnap = await getDoc(doc(db, 'trainers', uid));
-        if (trainerSnap.exists() && trainerSnap.data()?.active === true) {
+        let explicitTrainer = false;
+        try {
+          const trainerSnap = await getDoc(doc(db, 'trainers', uid));
+          explicitTrainer = trainerSnap.exists() && trainerSnap.data()?.active === true;
+        } catch (error) {
+          // Las reglas anteriores no incluyen /trainers: conservar acceso del coach existente.
+          console.warn('Rol de coach sin provisionar: comprobando alumnos asignados.');
+        }
+        if (explicitTrainer) {
           setUserRole('trainer');
         } else {
           // Compatibilidad con el coach histórico que ya tiene atletas a cargo.
