@@ -107,8 +107,7 @@ export const handler = async (event) => {
         type: type === 'student_linked' ? 'student_linked' : type === 'training_log' ? 'training_log' : 'training_note',
         clientId, clientName: studentName, trainerId: client.trainerId,
         title, body, read: false,
-        // Para consultas existentes, la fecha se completa desde el servidor en la siguiente versión.
-        createdAt: new Date().toISOString()
+        createdAt: new Date()
       });
     }
 
