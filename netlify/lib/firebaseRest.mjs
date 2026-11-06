@@ -89,7 +89,7 @@ export async function createFirestoreDoc(collectionName, id, fields) {
   const response = await fetch(docUrl(collectionName) + '?' + query, {
     method: 'POST',
     headers: { authorization: 'Bearer ' + await googleToken(), 'content-type': 'application/json' },
-    body: JSON.stringify({ fields: Object.fromEntries(Object.entries(fields).map(([key, val]) => [key, typeof val === 'boolean' ? boolean(val) : string(val)])) })
+    body: JSON.stringify({ fields: Object.fromEntries(Object.entries(fields).map(([key, val]) => [key, encodeValue(val)])) })
   });
   if (response.status === 409) return false;
   if (!response.ok) throw new Error('Firestore CREATE ' + response.status);
