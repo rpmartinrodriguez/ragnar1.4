@@ -7,7 +7,7 @@ import {
 // --- Firebase ---
 import { 
   collection, onSnapshot, addDoc, updateDoc, deleteDoc, 
-  doc, query, orderBy, where, getDocs, setDoc 
+  doc, query, orderBy, where, getDocs, getDoc, limit, setDoc 
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { db } from './firebase'; 
@@ -93,10 +93,19 @@ export default function App() {
         setUserRole('student');
         setStudentProfileId(clientDoc.id);
       } else {
-        setUserRole('trainer');
+        // Una cuenta registrada no se convierte automáticamente en entrenador.
+        const trainerSnap = await getDoc(doc(db, 'trainers', uid));
+        if (trainerSnap.exists() && trainerSnap.data()?.active === true) {
+          setUserRole('trainer');
+        } else {
+          // Compatibilidad con el coach histórico que ya tiene atletas a cargo.
+          const assigned = await getDocs(query(collection(db, 'clients'), where('trainerId', '==', uid), limit(1)));
+          setUserRole(assigned.empty ? 'unapproved' : 'trainer');
+        }
       }
     } catch (error) {
       console.error(error);
+      setUserRole('unapproved');
     }
   };
 
@@ -104,7 +113,7 @@ export default function App() {
   useEffect(() => {
     if (!user || userRole !== 'trainer') return;
 
-    const unsubClients = onSnapshot(collection(db, 'clients'), (snapshot) => {
+    const unsubClients = onSnapshot(query(collection(db, 'clients'), where('trainerId', '==', user.uid)), (snapshot) => {
       setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
@@ -184,7 +193,7 @@ export default function App() {
       try {
         await deleteDoc(doc(db, 'clients', clientId));
         if (selectedClient?.id === clientId) {
-          setCurrentView('clients');
+          setActiveView('clients');
           setSelectedClient(null);
         }
       } catch (error) { 
@@ -298,6 +307,14 @@ export default function App() {
     // 3. Vista Login (Sin sesión)
     if (!user) {
       return <LoginView onLoginSuccess={() => {}} />;
+    }
+
+    if (userRole !== 'trainer') {
+      return <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center text-center p-8 gap-5">
+        <h1 className="text-yellow-400 text-2xl font-black uppercase">Acceso pendiente</h1>
+        <p className="max-w-md text-zinc-400 text-sm">Esta cuenta todavía no tiene un rol de entrenador autorizado ni un perfil de alumno vinculado.</p>
+        <button onClick={handleLogout} className="rounded-xl border border-zinc-700 px-5 py-3 font-bold">Cerrar sesión</button>
+      </div>;
     }
 
     // 4. Vista de Entrenador (App Principal)
