@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { collection, onSnapshot, doc, setDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
+import { notifyActivity } from '../services/notifyActivity';
 
 export default function PaymentsView() {
   const [clients, setClients] = useState([]);
@@ -64,6 +65,7 @@ export default function PaymentsView() {
         date: new Date(),
         month: monthId
       });
+      void notifyActivity({ clientId: selectedClient.id, type: 'payment_recorded', resourceId: monthId });
       alert("Pago registrado.");
       setPaymentAmount('');
     } catch (e) { console.error(e); }
