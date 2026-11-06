@@ -2,7 +2,8 @@ import { verifyFirebaseUser, getFirestoreDoc, createFirestoreDoc, sendFcmToken }
 
 const allowedTypes = new Set([
   'message', 'workout_completed', 'missed_workout',
-  'session_assigned', 'session_note', 'training_note', 'training_log'
+  'session_assigned', 'session_note', 'training_note', 'training_log',
+  'student_linked', 'payment_recorded'
 ]);
 const response = (statusCode, body) => ({
   statusCode,
@@ -40,7 +41,17 @@ export const handler = async (event) => {
     const studentName = String(client.name || 'Un atleta').slice(0, 60);
     let source = null;
 
-    if (type === 'message') {
+    if (type === 'student_linked' && byStudent && resourceId === clientId) {
+      recipientId = client.trainerId;
+      title = 'Atleta vinculado';
+      body = studentName + ' activó su cuenta Ragnar.';
+    } else if (type === 'payment_recorded' && isTrainer) {
+      source = await getFirestoreDoc('clients/' + clientId + '/payments/' + resourceId);
+      if (source?.status !== 'paid') return response(409, { error: 'Pago sin registrar' });
+      recipientId = client.studentUserId;
+      title = 'Pago registrado';
+      body = 'Tu coach registró tu pago en Ragnar.';
+    } else if (type === 'message') {
       source = await getFirestoreDoc('clients/' + clientId + '/messages/' + resourceId);
       if (!source || (byStudent ? source.sender !== 'student' : source.sender !== 'trainer')) return response(403, { error: 'Mensaje no autorizado' });
       recipientId = byStudent ? client.trainerId : client.studentUserId;
@@ -91,9 +102,9 @@ export const handler = async (event) => {
     });
     if (!created) return response(200, { ok: true, duplicate: true, delivered: 0 });
 
-    if (byStudent && (type === 'session_note' || type === 'training_note' || type === 'training_log')) {
+    if (byStudent && (type === 'session_note' || type === 'training_note' || type === 'training_log' || type === 'student_linked')) {
       await createFirestoreDoc('trainerNotifications', 'evt_' + eventKey, {
-        type: type === 'training_log' ? 'training_log' : 'training_note',
+        type: type === 'student_linked' ? 'student_linked' : type === 'training_log' ? 'training_log' : 'training_note',
         clientId, clientName: studentName, trainerId: client.trainerId,
         title, body, read: false,
         // Para consultas existentes, la fecha se completa desde el servidor en la siguiente versión.
