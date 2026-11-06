@@ -10,7 +10,7 @@ import {
   doc, query, orderBy, where, getDocs, getDoc, limit, setDoc 
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
-import { db } from './firebase'; 
+import { db, isPreviewMissingFirebase } from './firebase'; 
 
 // --- Componentes ---
 import { Sidebar } from './components/Sidebar';
@@ -58,6 +58,7 @@ export default function App() {
 
   // --- EFECTO 1: Gestión de Sesión y Pantalla de Carga ---
   useEffect(() => {
+    if (isPreviewMissingFirebase) { setIsAppReady(true); return; }
     const params = new URLSearchParams(window.location.search);
     const inviteParam = params.get('invite');
     if (inviteParam) {
@@ -533,6 +534,14 @@ export default function App() {
       </div>
     );
   };
+
+  if (isPreviewMissingFirebase) return (
+    <main className="min-h-screen bg-black text-zinc-100 flex flex-col justify-center items-center text-center gap-4 p-6">
+      <h1 className="text-yellow-400 text-2xl font-black uppercase">Ragnar · Entorno de pruebas</h1>
+      <p className="max-w-lg text-zinc-300 text-sm">Falta conectar el proyecto Firebase de prueba. Para proteger los datos reales, esta vista no permite iniciar sesión ni modificar alumnos.</p>
+      <p className="text-zinc-500 text-xs">Configurá las variables VITE_FIREBASE_* en Netlify para Deploy Previews / Branch deploys.</p>
+    </main>
+  );
 
   return (
     <>
