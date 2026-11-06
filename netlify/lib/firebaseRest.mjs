@@ -65,6 +65,7 @@ export function decodeValue(v) {
   if (!v) return null;
   if ('stringValue' in v) return v.stringValue;
   if ('booleanValue' in v) return v.booleanValue;
+  if ('timestampValue' in v) return v.timestampValue;
   if ('integerValue' in v) return Number(v.integerValue);
   if ('doubleValue' in v) return Number(v.doubleValue);
   if ('arrayValue' in v) return (v.arrayValue.values || []).map(decodeValue);
@@ -82,6 +83,7 @@ export async function getFirestoreDoc(path) {
 
 const string = (s) => ({ stringValue: String(s || '') });
 const boolean = (b) => ({ booleanValue: Boolean(b) });
+const encodeValue = (val) => val instanceof Date ? { timestampValue: val.toISOString() } : typeof val === 'boolean' ? boolean(val) : string(val);
 export async function createFirestoreDoc(collectionName, id, fields) {
   const query = new URLSearchParams({ documentId: id });
   const response = await fetch(docUrl(collectionName) + '?' + query, {
