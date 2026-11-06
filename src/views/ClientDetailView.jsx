@@ -58,21 +58,16 @@ export default function ClientDetailView({ client, goBack, exercisesLibrary = []
 
   const currentDateId = formatDateId(date);
 
-  // --- ESCUCHA DE RUTINAS EN TIEMPO REAL ---
+  // Se observa el resumen de días una sola vez por atleta, no al cambiar de fecha.
   useEffect(() => {
     if (!client?.id) return;
+    return onSnapshot(collection(db, 'clients', client.id, 'sessions'), (snapshot) => {
+      setAllSessionsIds(snapshot.docs.filter((item) => (item.data().exercises || []).length > 0).map((item) => item.id));
+    });
+  }, [client?.id]);
 
-    const fetchAllSessions = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'clients', client.id, 'sessions'));
-        const ids = querySnapshot.docs
-          .filter(doc => doc.data().exercises && doc.data().exercises.length > 0)
-          .map(doc => doc.id);
-        setAllSessionsIds(ids);
-      } catch (error) { console.error(error); }
-    };
-    fetchAllSessions();
-
+  useEffect(() => {
+    if (!client?.id) return;
     const sessionDocRef = doc(db, 'clients', client.id, 'sessions', currentDateId);
     const unsubDaily = onSnapshot(sessionDocRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -94,8 +89,9 @@ export default function ClientDetailView({ client, goBack, exercisesLibrary = []
       setLoading(false);
     });
 
+
     return () => unsubDaily();
-  }, [client, currentDateId]);
+  }, [client?.id, currentDateId]);
 
   // --- ESCUCHA DE CHAT EN TIEMPO REAL ---
   useEffect(() => {
