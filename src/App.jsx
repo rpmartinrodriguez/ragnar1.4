@@ -373,7 +373,7 @@ export default function App() {
                   onClick={handleLogout} 
                   className="w-full p-4 text-left text-red-500 hover:bg-red-500/10 rounded-xl font-bold flex items-center gap-3 transition-colors"
                 >
-                  <LogOut size={20} /> Cerrar Sesión
+                  <LogOut size={20} /> Cerrar Sesión <span className="ml-1 text-yellow-400 font-black lowercase">ok</span>
                 </button>
               </div>
             </div>
