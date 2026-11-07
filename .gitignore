@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Rescates y credenciales - nunca subir al repositorio
+ragnar-respaldo-*.json
+*service-account*.json
+.env
+.env.*
