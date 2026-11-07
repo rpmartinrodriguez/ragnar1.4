@@ -25,6 +25,7 @@ import StudentView from './views/StudentView';
 import StudentRegistration from './views/StudentRegistration';
 import NotificationsView from './views/NotificationsView';
 import SettingsView from './views/SettingsView';
+import DataBackupPanel from './components/DataBackupPanel';
 import CommunityView from './views/CommunityView'; 
 import PaymentsView from './views/PaymentsView'; 
 
@@ -481,10 +482,13 @@ export default function App() {
             )}
             
             {activeView === 'settings' && (
+              <div className="space-y-5">
+                <DataBackupPanel />
               <SettingsView 
                 settings={settings} 
                 onUpdateSettings={handleUpdateSettings} 
               />
+              </div>
             )}
             
             {activeView === 'community' && (
