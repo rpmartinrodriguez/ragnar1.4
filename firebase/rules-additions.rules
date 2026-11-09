@@ -1,0 +1,76 @@
+// RAGNAR: reglas complementarias para pegar DENTRO del bloque:
+// match /databases/{database}/documents { ... }
+// NO reemplazar las reglas existentes sin auditar clients/sessions/messages/payments.
+// Probar en Firebase Emulator/Rules Playground ANTES de publicar.
+//
+// Los roles de coach se provisionan en trainers/{UID} con active:true
+// por un administrador, no desde el navegador.
+
+function ragnarSignedIn() {
+  return request.auth != null;
+}
+function ragnarTrainer(clientId) {
+  return ragnarSignedIn() &&
+    get(/databases/$(database)/documents/clients/$(clientId)).data.trainerId == request.auth.uid;
+}
+function ragnarStudent(clientId) {
+  return ragnarSignedIn() &&
+    get(/databases/$(database)/documents/clients/$(clientId)).data.studentUserId == request.auth.uid;
+}
+function ragnarActiveTrainer() {
+  return ragnarSignedIn() &&
+    exists(/databases/$(database)/documents/trainers/$(request.auth.uid)) &&
+    get(/databases/$(database)/documents/trainers/$(request.auth.uid)).data.active == true;
+}
+
+match /trainers/{uid} {
+  allow get: if ragnarSignedIn() && request.auth.uid == uid;
+  allow list, create, update, delete: if false; // Solo Firebase Console / Admin SDK
+}
+
+match /pushDevices/{uid} {
+  allow get, delete: if ragnarSignedIn() && request.auth.uid == uid;
+  allow list: if false;
+  allow create, update: if ragnarSignedIn() && request.auth.uid == uid
+    && request.resource.data.keys().hasOnly(['tokens', 'updatedAt'])
+    && request.resource.data.keys().hasAll(['tokens', 'updatedAt'])
+    && request.resource.data.tokens is list
+    && request.resource.data.tokens.size() <= 10;
+}
+
+match /notificationDispatch/{eventId} {
+  allow read, write: if false; // Exclusivo Netlify con cuenta de servicio
+}
+
+match /clients/{clientId}/trainingLogs/{entryId} {
+  allow read: if ragnarTrainer(clientId) || ragnarStudent(clientId);
+
+  allow create: if (ragnarTrainer(clientId) || ragnarStudent(clientId))
+    && get(/databases/$(database)/documents/clients/$(clientId)).data.serviceMode == 'presencial'
+    && request.resource.data.keys().hasOnly([
+      'date', 'exercise', 'sets', 'reps', 'weight', 'notes',
+      'authorRole', 'authorUid', 'createdAt'
+    ])
+    && request.resource.data.keys().hasAll([
+      'date', 'exercise', 'sets', 'reps', 'weight', 'notes',
+      'authorRole', 'authorUid', 'createdAt'
+    ])
+    && request.resource.data.authorUid == request.auth.uid
+    && request.resource.data.authorRole == (ragnarTrainer(clientId) ? 'trainer' : 'student')
+    && request.resource.data.date is string
+    && request.resource.data.exercise is string
+    && request.resource.data.exercise.size() <= 120
+    && request.resource.data.notes is string
+    && request.resource.data.notes.size() <= 1000
+    && request.resource.data.createdAt == request.time;
+
+  // Historial auditable: corregir mediante un nuevo registro, no borrando el pasado.
+  allow update, delete: if false;
+}
+
+// NOTA: las reglas existentes de clients, messages, sessions y trainerNotifications
+// deben seguir permitiendo los flujos actuales, pero limitar lectura/escritura
+// a coach autorizado o alumno vinculado. NO agregar allow read/write: if true.
+// Para /trainerNotifications, los alumnos actuales crean registros al finalizar
+// y reportar ausencias: permitir solo create desde estudiantes vinculados y
+// tipos concretos, o migrar esas altas a Netlify antes de cerrar escrituras.

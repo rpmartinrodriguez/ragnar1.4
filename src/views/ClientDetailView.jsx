@@ -9,6 +9,8 @@ import {
 import { collection, doc, onSnapshot, setDoc, getDocs, addDoc, query, orderBy, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import ProgressChart from '../components/ProgressChart';
+import TrainingLog from '../components/TrainingLog';
+import { notifyActivity } from '../services/notifyActivity';
 
 export default function ClientDetailView({ client, goBack, exercisesLibrary = [], routines = [] }) {
   const [activeTab, setActiveTab] = useState('planificacion'); // planificacion, progreso, mensajes
@@ -20,6 +22,7 @@ export default function ClientDetailView({ client, goBack, exercisesLibrary = []
   const [cardioTargetMinutes, setCardioTargetMinutes] = useState('');
   const [cardioTargetIntensity, setCardioTargetIntensity] = useState('Baja');
   const [isSessionFinalized, setIsSessionFinalized] = useState(false);
+  const [studentNote, setStudentNote] = useState('');
   
   const [allSessionsIds, setAllSessionsIds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,32 +58,29 @@ export default function ClientDetailView({ client, goBack, exercisesLibrary = []
 
   const currentDateId = formatDateId(date);
 
-  // --- ESCUCHA DE RUTINAS EN TIEMPO REAL ---
+  // Se observa el resumen de días una sola vez por atleta, no al cambiar de fecha.
   useEffect(() => {
     if (!client?.id) return;
+    return onSnapshot(collection(db, 'clients', client.id, 'sessions'), (snapshot) => {
+      setAllSessionsIds(snapshot.docs.filter((item) => (item.data().exercises || []).length > 0).map((item) => item.id));
+    });
+  }, [client?.id]);
 
-    const fetchAllSessions = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'clients', client.id, 'sessions'));
-        const ids = querySnapshot.docs
-          .filter(doc => doc.data().exercises && doc.data().exercises.length > 0)
-          .map(doc => doc.id);
-        setAllSessionsIds(ids);
-      } catch (error) { console.error(error); }
-    };
-    fetchAllSessions();
-
+  useEffect(() => {
+    if (!client?.id) return;
     const sessionDocRef = doc(db, 'clients', client.id, 'sessions', currentDateId);
     const unsubDaily = onSnapshot(sessionDocRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setDailySession(data.exercises || []);
+        setStudentNote(data.studentNote || '');
         setIsSessionFinalized(data.isFinalized || false);
         setHydrationTarget(data.targetHydration || '');
         setCardioTargetMinutes(data.targetCardioMinutes || '');
         setCardioTargetIntensity(data.targetCardioIntensity || 'Baja');
       } else {
         setDailySession([]);
+        setStudentNote('');
         setIsSessionFinalized(false);
         setHydrationTarget('');
         setCardioTargetMinutes('');
@@ -89,8 +89,9 @@ export default function ClientDetailView({ client, goBack, exercisesLibrary = []
       setLoading(false);
     });
 
+
     return () => unsubDaily();
-  }, [client, currentDateId]);
+  }, [client?.id, currentDateId]);
 
   // --- ESCUCHA DE CHAT EN TIEMPO REAL ---
   useEffect(() => {
@@ -117,9 +118,10 @@ export default function ClientDetailView({ client, goBack, exercisesLibrary = []
     e.preventDefault();
     if (!newMessage.trim()) return;
     try {
-      await addDoc(collection(db, 'clients', client.id, 'messages'), { 
+      const sent = await addDoc(collection(db, 'clients', client.id, 'messages'), { 
         text: newMessage, sender: 'trainer', createdAt: new Date(), read: false 
       });
+      void notifyActivity({ clientId: client.id, type: 'message', resourceId: sent.id });
       setNewMessage('');
     } catch (error) { console.error(error); }
   };
@@ -202,6 +204,7 @@ export default function ClientDetailView({ client, goBack, exercisesLibrary = []
       if (!allSessionsIds.includes(currentDateId)) {
         setAllSessionsIds([...allSessionsIds, currentDateId]);
       }
+      void notifyActivity({ clientId: client.id, type: 'session_assigned', resourceId: currentDateId });
     } catch (error) { console.error(error); }
   };
 
@@ -279,6 +282,7 @@ export default function ClientDetailView({ client, goBack, exercisesLibrary = []
         date: currentDateId, exercises: updatedSession
       }, { merge: true });
       setIsExerciseModalOpen(false);
+      void notifyActivity({ clientId: client.id, type: 'session_assigned', resourceId: currentDateId });
       if (updatedSession.length === 1 && !allSessionsIds.includes(currentDateId)) setAllSessionsIds([...allSessionsIds, currentDateId]);
     } catch (error) { console.error(error); }
   };
@@ -336,6 +340,11 @@ export default function ClientDetailView({ client, goBack, exercisesLibrary = []
         >
           Planificación
         </button>
+        {client.serviceMode === 'presencial' && (
+          <button onClick={() => setActiveTab('bitacora')} className={`pb-3 uppercase font-black text-xs tracking-widest whitespace-nowrap ${activeTab === 'bitacora' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-zinc-500 hover:text-zinc-300'}`}>
+            Bitácora presencial
+          </button>
+        )}
         <button 
           onClick={() => setActiveTab('progreso')} 
           className={`pb-3 uppercase font-black text-xs tracking-widest transition-colors whitespace-nowrap ${activeTab === 'progreso' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-zinc-500 hover:text-zinc-300'}`}
@@ -349,6 +358,8 @@ export default function ClientDetailView({ client, goBack, exercisesLibrary = []
           Mensajes
         </button>
       </div>
+
+      {client.serviceMode === 'presencial' && activeTab === 'bitacora' && <TrainingLog clientId={client.id} actor="trainer" clientName={client.name} />}
 
       {/* VISTA: PLANIFICACIÓN (CALENDARIO Y RUTINA) */}
       {activeTab === 'planificacion' && (
@@ -446,6 +457,12 @@ export default function ClientDetailView({ client, goBack, exercisesLibrary = []
                 </div>
               </div>
 
+              {studentNote && (
+                <div className="rounded-xl border border-yellow-400/20 bg-yellow-400/5 p-4 mb-5">
+                  <p className="text-yellow-400 font-black uppercase text-xs mb-2">Nota del alumno</p>
+                  <p className="whitespace-pre-wrap text-zinc-200 text-sm">{studentNote}</p>
+                </div>
+              )}
               {isSessionFinalized && (
                 <div className="mb-6 bg-green-500/10 border border-green-500/20 p-4 rounded-2xl flex items-center gap-3">
                   <div className="p-2 bg-green-500 rounded-full text-black"><CheckCircle size={20}/></div>

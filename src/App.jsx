@@ -7,10 +7,10 @@ import {
 // --- Firebase ---
 import { 
   collection, onSnapshot, addDoc, updateDoc, deleteDoc, 
-  doc, query, orderBy, where, getDocs, setDoc 
+  doc, query, orderBy, where, getDocs, getDoc, limit, setDoc 
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
-import { db } from './firebase'; 
+import { db, isPreviewMissingFirebase } from './firebase'; 
 
 // --- Componentes ---
 import { Sidebar } from './components/Sidebar';
@@ -26,7 +26,8 @@ import StudentRegistration from './views/StudentRegistration';
 import NotificationsView from './views/NotificationsView';
 import SettingsView from './views/SettingsView';
 import CommunityView from './views/CommunityView'; 
-import PaymentsView from './views/PaymentsView'; 
+import PaymentsView from './views/PaymentsView';
+import PushPermissionButton from './components/PushPermissionButton'; 
 
 export default function App() {
   // --- ESTADOS GLOBALES ---
@@ -57,6 +58,7 @@ export default function App() {
 
   // --- EFECTO 1: Gestión de Sesión y Pantalla de Carga ---
   useEffect(() => {
+    if (isPreviewMissingFirebase) { setIsAppReady(true); return; }
     const params = new URLSearchParams(window.location.search);
     const inviteParam = params.get('invite');
     if (inviteParam) {
@@ -73,13 +75,10 @@ export default function App() {
         setStudentProfileId(null);
       }
       
-      // MAGIA ANTI-PARPADEO: Dejamos que la data se cargue "tras bambalinas" por 1.5s
-      setTimeout(() => {
-        setSplashFade(true); // Inicia el desvanecimiento CSS
-        setTimeout(() => {
-          setIsAppReady(true); // Remueve la pantalla de carga del DOM
-        }, 700); // 700ms de transición fluida
-      }, 1500); 
+      // El splash termina cuando se resuelve el estado de autenticación.
+      // Evitamos 2.2 segundos de espera artificial en cada apertura.
+      setSplashFade(true);
+      setIsAppReady(true); 
     });
     
     return () => unsubscribe();
@@ -95,10 +94,26 @@ export default function App() {
         setUserRole('student');
         setStudentProfileId(clientDoc.id);
       } else {
-        setUserRole('trainer');
+        // Una cuenta registrada no se convierte automáticamente en entrenador.
+        let explicitTrainer = false;
+        try {
+          const trainerSnap = await getDoc(doc(db, 'trainers', uid));
+          explicitTrainer = trainerSnap.exists() && trainerSnap.data()?.active === true;
+        } catch (error) {
+          // Las reglas anteriores no incluyen /trainers: conservar acceso del coach existente.
+          console.warn('Rol de coach sin provisionar: comprobando alumnos asignados.');
+        }
+        if (explicitTrainer) {
+          setUserRole('trainer');
+        } else {
+          // Compatibilidad con el coach histórico que ya tiene atletas a cargo.
+          const assigned = await getDocs(query(collection(db, 'clients'), where('trainerId', '==', uid), limit(1)));
+          setUserRole(assigned.empty ? 'unapproved' : 'trainer');
+        }
       }
     } catch (error) {
       console.error(error);
+      setUserRole('unapproved');
     }
   };
 
@@ -106,7 +121,7 @@ export default function App() {
   useEffect(() => {
     if (!user || userRole !== 'trainer') return;
 
-    const unsubClients = onSnapshot(collection(db, 'clients'), (snapshot) => {
+    const unsubClients = onSnapshot(query(collection(db, 'clients'), where('trainerId', '==', user.uid)), (snapshot) => {
       setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
@@ -186,7 +201,7 @@ export default function App() {
       try {
         await deleteDoc(doc(db, 'clients', clientId));
         if (selectedClient?.id === clientId) {
-          setCurrentView('clients');
+          setActiveView('clients');
           setSelectedClient(null);
         }
       } catch (error) { 
@@ -286,7 +301,9 @@ export default function App() {
           inviteId={inviteId} 
           onRegisterSuccess={() => { 
             window.history.pushState({}, document.title, window.location.pathname); 
-            setInviteId(null); 
+            setInviteId(null);
+            // El alta y el vínculo se acaban de guardar: refrescar el rol sin recargar.
+            if (auth.currentUser) void checkUserRole(auth.currentUser.uid);
           }} 
         />
       );
@@ -300,6 +317,14 @@ export default function App() {
     // 3. Vista Login (Sin sesión)
     if (!user) {
       return <LoginView onLoginSuccess={() => {}} />;
+    }
+
+    if (userRole !== 'trainer') {
+      return <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center text-center p-8 gap-5">
+        <h1 className="text-yellow-400 text-2xl font-black uppercase">Acceso pendiente</h1>
+        <p className="max-w-md text-zinc-400 text-sm">Esta cuenta todavía no tiene un rol de entrenador autorizado ni un perfil de alumno vinculado.</p>
+        <button onClick={handleLogout} className="rounded-xl border border-zinc-700 px-5 py-3 font-bold">Cerrar sesión</button>
+      </div>;
     }
 
     // 4. Vista de Entrenador (App Principal)
@@ -481,10 +506,13 @@ export default function App() {
             )}
             
             {activeView === 'settings' && (
+              <div className="space-y-5">
+                <PushPermissionButton />
               <SettingsView 
                 settings={settings} 
                 onUpdateSettings={handleUpdateSettings} 
               />
+              </div>
             )}
             
             {activeView === 'community' && (
@@ -515,6 +543,14 @@ export default function App() {
       </div>
     );
   };
+
+  if (isPreviewMissingFirebase) return (
+    <main className="min-h-screen bg-black text-zinc-100 flex flex-col justify-center items-center text-center gap-4 p-6">
+      <h1 className="text-yellow-400 text-2xl font-black uppercase">Ragnar · Entorno de pruebas</h1>
+      <p className="max-w-lg text-zinc-300 text-sm">Falta conectar el proyecto Firebase de prueba. Para proteger los datos reales, esta vista no permite iniciar sesión ni modificar alumnos.</p>
+      <p className="text-zinc-500 text-xs">Configurá las variables VITE_FIREBASE_* en Netlify para Deploy Previews / Branch deploys.</p>
+    </main>
+  );
 
   return (
     <>
